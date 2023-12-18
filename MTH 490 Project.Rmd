@@ -1,0 +1,155 @@
+---
+title: "MTH 490 Project"
+author: "Joseph Wuest"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+# Import Necessary Packages
+```{r}
+library("readxl")
+library("tidyverse")
+library("ggplot2")
+library("ggiraph")
+library("lubridate")
+```
+
+# Import statistical d ata, clean it so that only goalies with 250 or more shots
+# against are visible. Also, convert any necessary columns from class character 
+# to class numeric. This involves removing commas.
+
+```{r}
+hockey_data <- read_excel("Summary.xlsx")
+
+hockey_data$SA <- as.numeric(gsub(",", "", hockey_data$SA))
+hockey_data$Svs <- as.numeric(gsub(",", "", hockey_data$Svs))
+hockey_data$GA <- as.numeric(gsub(",", "", hockey_data$GA))
+hockey_data$`Sv%` <- as.numeric(hockey_data$`Sv%`)
+
+
+
+cleaned_data <- hockey_data %>% select(1, 5:8, 11:14, 16)
+cleaned_data <- cleaned_data %>% filter(SA > 250)
+cleaned_data
+```
+
+
+# Use full data set to gather average statistics, such as a league average save
+# percentage.
+
+```{r}
+total_shots <- sum(hockey_data$SA)
+total_saves <- sum(hockey_data$Svs)
+total_goals <- sum(hockey_data$GA)
+
+avg_sv_pct <- total_saves/total_shots
+```
+
+
+# Compute Sharpe Ratio, add it to the data frame
+
+
+```{r}
+sv_pct_sd <- sd(na.omit(hockey_data$'Sv%'))
+cleaned_data$SR <- (cleaned_data$`Sv%` - avg_sv_pct)/sv_pct_sd
+```
+
+
+# Merge salary data to the cleaned data, must rename data headers first
+
+
+```{r}
+salary_data <- read_excel("Salary Data NHL.xlsx")
+colnames(salary_data)[1] <- "Player"
+colnames(salary_data)[2] <- "Cap Hit"
+colnames(salary_data)[3] <- "Salary"
+```
+
+```{r}
+complete_data <- merge(cleaned_data, salary_data, by="Player")
+```
+
+
+# Plot salary against sharpe ratio
+
+
+```{r}
+sr_to_salary <- ggplot(complete_data, )+
+                geom_point(aes(x = SR, y = Salary/1000000), color = "black", size = 1)+
+                geom_vline(xintercept = 0, color = "red", linetype  = "33")+
+                xlab("Modified Sharpe Ratio")+
+                ylab("Salary (in Millions of dollars)")
+                
+sr_to_salary
+```
+
+```{r}
+complete_data$"TOI (min)" <- gsub('.{3}$', '', complete_data$TOI)
+complete_data$`TOI (min)` <- as.numeric(complete_data$`TOI (min)`)
+
+toi_to_salary <- ggplot(complete_data, )+
+                geom_point(aes(x = `TOI (min)`, y = Salary/1000000))+
+                xlab("Time on the Ice")+
+                ylab("Salary (in Millions of dollars)")
+                
+toi_to_salary
+```
+
+```{r}
+
+sv_pct_to_salary <- ggplot(complete_data, )+
+                geom_point(aes(x = `Sv%`, y = Salary/1000000))+
+                xlab("Save Percentage")+
+                ylab("Salary (in Millions)")
+                
+sv_pct_to_salary
+```
+
+
+```{r}
+sv_pct_to_toi <- ggplot(complete_data, )+
+              geom_point(aes(x = SR , y = Salary/`TOI (min)`*`Sv%`))
+sv_pct_to_toi
+```
+
+
+```{r}
+complete_data$`W%` <- complete_data$W/(complete_data$W+complete_data$L)
+sr_to_w_pct <- ggplot(complete_data, aes(x = SR, y = `W%`))+
+            geom_point() + 
+            geom_smooth(method='lm', formula = y ~ x, se = FALSE, color = "green", linetype = "2212")+
+            xlab("Modified Sharpe Ratio")+
+            ylab("Win Percentage")
+sr_to_w_pct
+```
+```{r}
+w_pct_to_salary <- ggplot(complete_data, )+
+                geom_point(aes(x = `W%`, y = Salary))
+w_pct_to_salary
+```
+
+
+```{r}
+high_salary_data <- complete_data %>%
+                    filter(Salary > 3000000)
+high_salary_to_sr <- ggplot(high_salary_data, aes(x = SR, y = Salary/1000000))+
+                  geom_point()+
+                  xlab("Sharpe Ratio")+
+                  ylab("Salary (in Millions of dollars)")+
+                  geom_smooth(method='lm', formula = y ~ x, se = FALSE, color = "darkblue")+
+                  geom_vline(xintercept = 0, linetype = "dashed", color = "red")+
+                  xlim(-.5, .5)
+                  
+high_salary_to_sr
+```
+
+
+
+
+
